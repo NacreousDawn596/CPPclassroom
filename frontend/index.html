@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GadzIT C++ IDE</title>
+    <meta name="description" content="An online C++ IDE with interactive terminal support for compiling and running C++ code in your browser.">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+    <div class="ide-container">
+        <div class="top-bar">
+            <div class="logo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 7h16M4 12h16M4 17h16"/>
+                </svg>
+                GadzIT C++ IDE
+            </div>
+            <div class="run-controls">
+                <button class="btn" id="runBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    Run
+                </button>
+                <button class="btn btn-secondary" id="clearOutputBtn">Clear Output</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    Files
+                    <button class="new-file-btn" id="newFileBtn" title="New File">+</button>
+                </div>
+                <div class="file-list" id="fileList"></div>
+            </div>
+
+            <div class="editor-area">
+                <div class="tabs-bar" id="tabsBar"></div>
+                <div class="editor-container">
+                    <textarea id="editor"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="output-panel">
+            <div class="output-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                Input & Output
+            </div>
+            <div class="io-container">
+                <div class="terminal-container" id="terminal"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="newFileModal">
+        <div class="modal-content">
+            <div class="modal-title">Create New File</div>
+            <input type="text" class="modal-input" id="fileNameInput" placeholder="filename.cpp" />
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                <button class="btn" id="createBtn">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/app.js"></script>
+</body>
+</html>

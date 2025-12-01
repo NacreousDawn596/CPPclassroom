@@ -1,0 +1,6 @@
+flask==3.0.0
+flask-cors==4.0.0
+Werkzeug==3.0.1
+flask-socketio==5.3.6
+ptyprocess==0.7.0
+eventlet==0.33.3

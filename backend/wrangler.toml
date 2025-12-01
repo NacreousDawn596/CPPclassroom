@@ -1,0 +1,21 @@
+name = "gadzit-cpp-ide"
+main = "src/index.js"
+compatibility_date = "2024-04-05"
+
+# Container Binding (Private Beta Feature)
+[[containers]]
+class_name = "MyContainer"
+image = "./container/Dockerfile"
+max_instances = 5
+
+# Durable Object Binding
+[[durable_objects.bindings]]
+class_name = "MyContainer"
+name = "MY_CONTAINER"
+
+[[migrations]]
+new_sqlite_classes = [ "MyContainer" ]
+tag = "v1"
+
+[build]
+command = "npm install"

@@ -1,0 +1,26 @@
+services:
+  cpp-backend:
+    build: .
+    container_name: cpp-playground-backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./app.py:/app/app.py  # Mount your code file
+      - ./frontend/index.html:/app/index.html 
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 1G
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+    networks:
+      - cpp-network
+
+networks:
+  cpp-network:
+    driver: bridge
