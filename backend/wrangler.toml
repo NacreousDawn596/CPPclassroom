@@ -22,3 +22,6 @@ tag = "v1"
 
 [build]
 command = "npm install"
+
+[placement]
+mode = "smart"
