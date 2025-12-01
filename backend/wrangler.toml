@@ -3,7 +3,9 @@ main = "src/index.js"
 compatibility_date = "2024-04-05"
 
 # Container Binding (Private Beta Feature)
-[[containers]]
+# Changed from [[containers]] to [containers] based on error message
+# "containers should be an object, but got an array"
+[containers]
 class_name = "MyContainer"
 image = "./container/Dockerfile"
 max_instances = 5
