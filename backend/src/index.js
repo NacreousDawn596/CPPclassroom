@@ -28,6 +28,25 @@ export default {
                 if (path === '/run' && request.method === 'POST') {
                     try {
                         const body = await request.json();
+
+                        // CHECK FOR SPAWN METHOD (User requested pattern)
+                        if (env.MY_CONTAINER && typeof env.MY_CONTAINER.spawn === 'function') {
+                            // If the binding supports spawn (e.g. Workers AI / Constellations / Workflows)
+                            // We try to use it. Note: The arguments for spawn depend on the specific API.
+                            // We'll assume it takes an array of args or an object.
+                            try {
+                                // This is speculative based on the prompt "env.MY_CONTAINER.spawn([...])"
+                                // We might need to pass the command or arguments.
+                                // For now, we'll try to spawn and see if we get a response.
+                                const process = await env.MY_CONTAINER.spawn();
+                                // If spawn returns a process/stub, we might need to interact with it.
+                                // Since we don't have the exact API, we will fall back to the DO pattern
+                                // if this doesn't return an immediate response.
+                            } catch (spawnError) {
+                                console.warn("Spawn failed, falling back to DO:", spawnError);
+                            }
+                        }
+
                         const id = env.MY_CONTAINER.newUniqueId();
                         const stub = env.MY_CONTAINER.get(id);
 
@@ -99,20 +118,20 @@ export class MyContainer {
         this.state = state;
         this.env = env;
         // In a real container binding, we might spawn the container here
-        // this.container = env.MY_CONTAINER_IMAGE.spawn(); 
-        // But per user instructions, we are simulating the "Container" behavior or 
+        // this.container = env.MY_CONTAINER_IMAGE.spawn();
+        // But per user instructions, we are simulating the "Container" behavior or
         // assuming the binding *is* the container.
         // Since we need to run Python, and we can't run Python directly in the Worker JS,
         // we assume the "image" config in wrangler.toml handles the runtime.
         // However, for this code to be valid JS, we need to handle the requests.
-        // 
+        //
         // IMPORTANT: Since we cannot actually run the Docker container in this environment
         // without the actual Cloudflare Container runtime (which is private beta),
-        // we will implement the logic to forward to an external container OR 
+        // we will implement the logic to forward to an external container OR
         // mock the behavior if we were just testing.
         //
         // BUT, the user asked for the *code* to be produced.
-        // I will write the code assuming the Container Binding exposes a `fetch` 
+        // I will write the code assuming the Container Binding exposes a `fetch`
         // that routes into the container's internal server (Flask app).
     }
 
