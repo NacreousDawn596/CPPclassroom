@@ -1,83 +1,93 @@
-
 export default {
     async fetch(request, env) {
-        const url = new URL(request.url);
-
-        // CORS Headers
         const corsHeaders = {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
         };
 
-        if (request.method === 'OPTIONS') {
-            return new Response(null, { headers: corsHeaders });
+        try {
+            const url = new URL(request.url);
+
+            if (request.method === 'OPTIONS') {
+                return new Response(null, { headers: corsHeaders });
+            }
+
+            // API Routes
+            if (url.pathname.startsWith('/api')) {
+                const path = url.pathname.replace('/api', '');
+
+                // Check if Container binding exists
+                if (!env.MY_CONTAINER) {
+                    return new Response(JSON.stringify({
+                        error: 'Configuration Error: MY_CONTAINER binding is missing. Ensure Durable Objects are enabled and bound in wrangler.toml.'
+                    }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                // POST /run - Start new session
+                if (path === '/run' && request.method === 'POST') {
+                    try {
+                        const body = await request.json();
+                        const id = env.MY_CONTAINER.newUniqueId();
+                        const stub = env.MY_CONTAINER.get(id);
+
+                        // Forward request to Container DO
+                        const response = await stub.fetch(new Request(request.url, {
+                            method: 'POST',
+                            body: JSON.stringify(body),
+                            headers: request.headers
+                        }));
+
+                        const data = await response.json();
+                        return new Response(JSON.stringify({ ...data, sessionId: id.toString() }), {
+                            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                        });
+                    } catch (e) {
+                        return new Response(JSON.stringify({ error: 'Session Creation Failed: ' + e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    }
+                }
+
+                // GET /output/:sessionId - Stream output
+                if (path.startsWith('/output/') && request.method === 'GET') {
+                    const sessionId = path.split('/')[2];
+                    if (!sessionId) return new Response(JSON.stringify({ error: 'Missing session ID' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+                    try {
+                        const id = env.MY_CONTAINER.idFromString(sessionId);
+                        const stub = env.MY_CONTAINER.get(id);
+                        return stub.fetch(request);
+                    } catch (e) {
+                        return new Response(JSON.stringify({ error: 'Invalid session ID' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    }
+                }
+
+                // POST /input/:sessionId - Send input
+                if (path.startsWith('/input/') && request.method === 'POST') {
+                    const sessionId = path.split('/')[2];
+                    if (!sessionId) return new Response(JSON.stringify({ error: 'Missing session ID' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+                    try {
+                        const id = env.MY_CONTAINER.idFromString(sessionId);
+                        const stub = env.MY_CONTAINER.get(id);
+                        const response = await stub.fetch(request);
+                        return new Response(response.body, { headers: corsHeaders });
+                    } catch (e) {
+                        return new Response(JSON.stringify({ error: 'Invalid session ID' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    }
+                }
+
+                return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            return new Response(JSON.stringify({ message: 'Welcome to GadzIT C++ IDE Backend' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+        } catch (e) {
+            // Global error handler to ensure JSON response
+            return new Response(JSON.stringify({ error: 'Internal Server Error: ' + e.message, stack: e.stack }), {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
         }
-
-        // API Routes
-        if (url.pathname.startsWith('/api')) {
-            const path = url.pathname.replace('/api', '');
-
-            // POST /run - Start new session
-            if (path === '/run' && request.method === 'POST') {
-                try {
-                    const body = await request.json();
-                    const id = env.MY_CONTAINER.newUniqueId();
-                    const stub = env.MY_CONTAINER.get(id);
-
-                    // Forward request to Container DO
-                    const response = await stub.fetch(new Request(request.url, {
-                        method: 'POST',
-                        body: JSON.stringify(body),
-                        headers: request.headers
-                    }));
-
-                    const data = await response.json();
-                    return new Response(JSON.stringify({ ...data, sessionId: id.toString() }), {
-                        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                    });
-                } catch (e) {
-                    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
-                }
-            }
-
-            // GET /output/:sessionId - Stream output
-            if (path.startsWith('/output/') && request.method === 'GET') {
-                const sessionId = path.split('/')[2];
-                if (!sessionId) return new Response('Missing session ID', { status: 400, headers: corsHeaders });
-
-                try {
-                    const id = env.MY_CONTAINER.idFromString(sessionId);
-                    const stub = env.MY_CONTAINER.get(id);
-
-                    // Forward to DO
-                    return stub.fetch(request);
-                } catch (e) {
-                    return new Response('Invalid session ID', { status: 400, headers: corsHeaders });
-                }
-            }
-
-            // POST /input/:sessionId - Send input
-            if (path.startsWith('/input/') && request.method === 'POST') {
-                const sessionId = path.split('/')[2];
-                if (!sessionId) return new Response('Missing session ID', { status: 400, headers: corsHeaders });
-
-                try {
-                    const id = env.MY_CONTAINER.idFromString(sessionId);
-                    const stub = env.MY_CONTAINER.get(id);
-
-                    // Forward to DO
-                    const response = await stub.fetch(request);
-                    return new Response(response.body, { headers: corsHeaders });
-                } catch (e) {
-                    return new Response('Invalid session ID', { status: 400, headers: corsHeaders });
-                }
-            }
-
-            return new Response('Not Found', { status: 404, headers: corsHeaders });
-        }
-
-        return new Response('Welcome to GadzIT C++ IDE Backend', { headers: corsHeaders });
     }
 };
 
