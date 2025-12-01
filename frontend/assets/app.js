@@ -1,4 +1,7 @@
-const API_URL = 'http://localhost:8787/api'; // Local Worker dev server
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_URL = IS_LOCAL
+    ? 'http://localhost:8787/api'
+    : 'https://cppclassroombackend.k-aferiad.workers.dev/api'; // Relative path for Cloudflare Pages + Workers integration
 const STORAGE_KEY = 'cpp_playground_files';
 
 let editor;
