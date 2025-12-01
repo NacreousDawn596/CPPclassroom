@@ -1,4 +1,4 @@
-const API_URL = 'https://cppclassroombackend.k-aferiad.workers.dev/api'; // Relative path for Cloudflare Pages + Workers integration
+const API_URL = 'http://localhost:8787/api'; // Local Worker dev server
 const STORAGE_KEY = 'cpp_playground_files';
 
 let editor;

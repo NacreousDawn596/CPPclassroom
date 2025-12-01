@@ -142,7 +142,7 @@ export class MyContainer {
         // Note: In a real Cloudflare Container setup, the networking might differ.
         // We assume the container is listening on localhost:8080 within the DO's network namespace.
         // Using 'localhost' instead of '127.0.0.1' to avoid "Direct IP access not allowed" error.
-        const containerUrl = `http://localhost:8080${url.pathname}`;
+        const containerUrl = `http://localhost:5550${url.pathname}`;
 
         try {
             const response = await fetch(containerUrl, {

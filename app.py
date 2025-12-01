@@ -1,7 +1,7 @@
 import eventlet
 eventlet.monkey_patch()
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, Response, jsonify
 from flask_socketio import SocketIO, emit
 import subprocess
 import tempfile
@@ -15,9 +15,12 @@ import signal
 import threading
 import time
 import ptyprocess
+import uuid
+import json
 
 app = Flask(__name__, template_folder="./frontend")
 app.config['SECRET_KEY'] = 'secret!'
+# Keep SocketIO for legacy/fallback if needed, but we are moving to HTTP/SSE
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 @app.route('/', methods=['GET'])
@@ -28,30 +31,16 @@ def home():
 def health():
     return {'status': 'healthy'}
 
+# Store active processes: { sessionId: { 'proc': ptyprocess, 'output_queue': [], 'finished': False } }
 active_processes = {}
 
-@socketio.on('connect')
-def handle_connect():
-    print(f"Client connected: {request.sid}")
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print(f"Client disconnected: {request.sid}")
-    sid = request.sid
-    if sid in active_processes:
-        proc = active_processes[sid]['proc']
-        proc.terminate(force=True)
-        del active_processes[sid]
-
-@socketio.on('run_code')
-def handle_run_code(data):
-    print(f"Received run_code request from {request.sid}")
+@app.route('/run', methods=['POST'])
+def run_code_http():
+    data = request.json
     code = data.get('code', '')
-    sid = request.sid
     
     if not code:
-        emit('output', 'Error: No code provided\r\n')
-        return
+        return jsonify({'error': 'No code provided'}), 400
 
     # Create temporary file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as cpp_file:
@@ -71,77 +60,97 @@ def handle_run_code(data):
         )
 
         if compile_process.returncode != 0:
-            print("Compilation failed")
-            emit('output', '\x1b[31mCompilation Error:\x1b[0m\r\n')
-            emit('output', compile_process.stderr.replace('\n', '\r\n'))
-            return
+            return jsonify({
+                'message': 'Compilation failed',
+                'stderr': compile_process.stderr
+            }), 400
 
-        print("Compilation successful. Starting process...")
-        
-        # Clean up previous process for this session if any
-        if sid in active_processes:
-            old_proc = active_processes[sid]['proc']
-            old_proc.terminate(force=True)
-            
+        # Start process
         proc = ptyprocess.PtyProcess.spawn([exe_path])
+        session_id = str(uuid.uuid4())
         
-        active_processes[sid] = {'proc': proc}
+        active_processes[session_id] = {
+            'proc': proc,
+            'cpp_path': cpp_path,
+            'exe_path': exe_path,
+            'created_at': time.time()
+        }
         
-        def read_loop():
-            print(f"Started read_loop for {sid}")
-            fd = proc.fd
-            while True:
-                try:
-                    if not proc.isalive():
-                        break
-                    
-                    # Use select to wait for data (timeout allows yielding)
-                    r, w, x = select.select([fd], [], [], 0.1)
-                    
-                    if fd in r:
-                        data = os.read(fd, 1024)
-                        if data:
-                            print(f"Read data: {data}")
-                            socketio.emit('output', data.decode(errors='replace'), room=sid)
-                    
-                    socketio.sleep(0) # Explicit yield just in case
-                except OSError as e:
-                    # Input/output error usually means the process died
-                    print(f"OSError in read_loop: {e}")
-                    break
-                except Exception as e:
-                    print(f"Error in read_loop: {e}")
-                    break
-            
-            print(f"Process finished for {sid}")
-            socketio.emit('output', '\r\n\x1b[32mProgram exited.\x1b[0m\r\n', room=sid)
-            if os.path.exists(exe_path):
-                os.remove(exe_path)
-            if os.path.exists(cpp_path):
-                os.remove(cpp_path)
-
-        socketio.start_background_task(read_loop)
+        return jsonify({'sessionId': session_id})
 
     except Exception as e:
-        print(f"Exception in run_code: {e}")
-        emit('output', f'\r\nError: {str(e)}\r\n')
         if os.path.exists(cpp_path):
             os.remove(cpp_path)
+        return jsonify({'error': str(e)}), 500
 
-@socketio.on('input')
-def handle_input(data):
-    sid = request.sid
-    print(f"Received input from {sid}: {repr(data)}")
-    if sid in active_processes:
-        proc = active_processes[sid]['proc']
-        if proc.isalive():
-            print(f"Writing to process for {sid}")
-            proc.write(data.encode())
-            # proc.flush() # ptyprocess write is unbuffered
-        else:
-            print(f"Process not alive for {sid}")
+@app.route('/output/<session_id>', methods=['GET'])
+def get_output(session_id):
+    if session_id not in active_processes:
+        return jsonify({'error': 'Session not found'}), 404
+
+    def generate():
+        session = active_processes[session_id]
+        proc = session['proc']
+        fd = proc.fd
+        
+        yield f"data: {json.dumps({'output': 'Connected to terminal session...\\r\\n'})}\n\n"
+
+        try:
+            while True:
+                if not proc.isalive():
+                    break
+                
+                r, w, x = select.select([fd], [], [], 0.1)
+                
+                if fd in r:
+                    try:
+                        data = os.read(fd, 1024)
+                        if data:
+                            yield f"data: {json.dumps({'output': data.decode(errors='replace')})}\n\n"
+                    except OSError:
+                        break
+                
+                eventlet.sleep(0.01)
+            
+            yield f"data: {json.dumps({'output': '\\r\\n\\x1b[32mProgram exited.\\x1b[0m\\r\\n', 'status': 'finished'})}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            # Cleanup
+            cleanup_session(session_id)
+
+    return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/input/<session_id>', methods=['POST'])
+def send_input(session_id):
+    if session_id not in active_processes:
+        return jsonify({'error': 'Session not found'}), 404
+        
+    data = request.json
+    input_text = data.get('input', '')
+    
+    session = active_processes[session_id]
+    proc = session['proc']
+    
+    if proc.isalive():
+        proc.write(input_text.encode())
+        return jsonify({'status': 'ok'})
     else:
-        print(f"No active process for {sid}")
+        return jsonify({'error': 'Process finished'}), 400
+
+def cleanup_session(session_id):
+    if session_id in active_processes:
+        session = active_processes[session_id]
+        proc = session['proc']
+        proc.terminate(force=True)
+        
+        if os.path.exists(session['exe_path']):
+            os.remove(session['exe_path'])
+        if os.path.exists(session['cpp_path']):
+            os.remove(session['cpp_path'])
+            
+        del active_processes[session_id]
 
 if __name__ == '__main__':
     print("Starting server on port 5550...")
