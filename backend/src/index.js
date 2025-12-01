@@ -117,46 +117,43 @@ export class MyContainer {
     }
 
     async fetch(request) {
-        // In the "Workers with Containers" model, the DO *is* the container's entry point
-        // or we proxy to it. 
-        // If this class *is* the container definition in the config, then requests to this DO
-        // are actually handled by the container if configured correctly.
-        // 
-        // However, usually you need to forward the request to the internal service.
-        // Let's assume the container is running on localhost inside the DO sandbox 
-        // or accessible via a binding.
-
-        // For the purpose of this deliverable, I will assume the container is running 
-        // the Flask app on port 8080 (or similar) and we proxy to it.
-        // OR, if the `image` field in wrangler.toml does the magic, we might not even need this class
-        // if the worker forwards directly. 
-        // But the user asked for `env.MY_CONTAINER.spawn` which implies the Worker controls it.
-
-        // Let's implement the logic to talk to the internal Flask app.
-        // Since we can't easily "spawn" it in JS, we'll assume it's running.
-
         const url = new URL(request.url);
 
-        // Rewrite URL to point to container service (localhost inside the DO?)
-        // This is speculative as the API is beta.
-        // A common pattern is `fetch('http://localhost:8080' + path)`
+        // Attempt to connect to the container service
+        // Note: In a real Cloudflare Container setup, the networking might differ.
+        // We assume the container is listening on localhost:8080 within the DO's network namespace.
+        const containerUrl = `http://127.0.0.1:8080${url.pathname}`;
 
         try {
-            // We'll use a hypothetical internal fetch to the container
-            // In reality, this might need adjustment based on the specific beta API.
-            const containerUrl = `http://127.0.0.1:8080${url.pathname}`;
-
-            // Forward the request to the Python Flask app running in the container
             const response = await fetch(containerUrl, {
                 method: request.method,
                 headers: request.headers,
                 body: request.body
             });
 
-            return response;
+            // Check if the response is JSON
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response;
+            } else {
+                // If not JSON, read text and wrap in JSON to avoid crashing the Worker
+                const text = await response.text();
+                return new Response(JSON.stringify({
+                    error: `Container returned non-JSON response: ${response.status} ${response.statusText}`,
+                    details: text.substring(0, 1000) // Truncate to avoid huge payloads
+                }), {
+                    status: response.status >= 400 ? response.status : 500,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
         } catch (e) {
-            // Fallback/Mock for demonstration if container isn't actually running in this env
-            return new Response(JSON.stringify({ error: "Container communication failed: " + e.message }), { status: 500 });
+            return new Response(JSON.stringify({
+                error: "Container communication failed. Is the container running?",
+                details: e.message
+            }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
     }
 }
