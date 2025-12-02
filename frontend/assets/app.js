@@ -1,7 +1,4 @@
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_URL = IS_LOCAL
-    ? 'http://localhost:5550'
-    : 'https://backend-snowy-wildflower-8765.fly.dev';
+const API_URL = 'https://backend-snowy-wildflower-8765.fly.dev';
 const STORAGE_KEY = 'cpp_playground_files';
 
 let editor;

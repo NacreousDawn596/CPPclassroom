@@ -18,10 +18,119 @@ import ptyprocess
 import uuid
 import json
 
+from flask_cors import CORS
+
 app = Flask(__name__, template_folder="./frontend")
 app.config['SECRET_KEY'] = 'secret!'
+CORS(app, resources={r"/*": {"origins": ["https://cppclassroom.k-aferiad.workers.dev", "https://backend-snowy-wildflower-8765.fly.dev", "https://cpp.gadzit.lol" ]}})
 # Keep SocketIO for legacy/fallback if needed, but we are moving to HTTP/SSE
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins=["https://cppclassroom.k-aferiad.workers.dev", "https://backend-snowy-wildflower-8765.fly.dev", "https://cpp.gadzit.lol"], async_mode='eventlet')
+
+import os
+import subprocess
+
+@socketio.on('connect')
+def handle_connect():
+    print("✅ Client Connected!")
+
+@socketio.on('run_code')
+def handle_run_code(data):
+    print(f"📝 Received code length: {len(data.get('code', ''))}") # Shows in fly logs
+
+    try:
+        code = data.get('code')
+        if not code:
+            emit('output', "Error: No code received")
+            return
+
+        # 1. Write to /tmp (Safe directory in Docker)
+        source_file = "/tmp/program.cpp"
+        executable = "/tmp/program"
+        
+        with open(source_file, "w") as f:
+            f.write(code)
+
+        # 2. Compile
+        # We capture both stdout and stderr to see compilation errors
+        compile_process = subprocess.run(
+            ["g++", source_file, "-o", executable],
+            capture_output=True,
+            text=True
+        )
+
+        if compile_process.returncode != 0:
+            # Send compilation error back to client
+            emit('output', f"⚠️ Compilation Error:\n{compile_process.stderr}")
+            return
+
+        # 3. Run
+        # Set a timeout so infinite loops don't kill your server
+        run_process = subprocess.run(
+            [executable],
+            capture_output=True,
+            text=True,
+            timeout=5  # 5 second timeout
+        )
+
+        # 4. Send Output
+        output = run_process.stdout + run_process.stderr
+        emit('output', output)
+        print("✅ Output sent to client")
+
+    except subprocess.TimeoutExpired:
+        emit('output', "⏱️ Error: Execution Timed Out (Limit: 5s)")
+    except Exception as e:
+        print(f"🔥 Server Error: {e}") # Shows in fly logs
+        emit('output', f"🔥 Server Error: {str(e)}")
+
+@app.route('/run_code', methods=['POST'])
+def run_code():
+    data = request.json
+    code = data.get('code', '')
+    
+    if not code:
+        return jsonify({'error': 'No code provided'}), 400
+
+    # Create temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as cpp_file:
+        cpp_file.write(code)
+        cpp_path = cpp_file.name
+
+    exe_path = cpp_path.replace('.cpp', '.out')
+    print(f"Compiling {cpp_path} to {exe_path}")
+
+    try:
+        # Compile
+        compile_process = subprocess.run(
+            ['g++', cpp_path, '-o', exe_path, '-std=c++17'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if compile_process.returncode != 0:
+            return jsonify({
+                'message': 'Compilation failed',
+                'stderr': compile_process.stderr
+            }), 400
+
+        # Start process
+        proc = ptyprocess.PtyProcess.spawn([exe_path])
+        session_id = str(uuid.uuid4())
+        
+        active_processes[session_id] = {
+            'proc': proc,
+            'cpp_path': cpp_path,
+            'exe_path': exe_path,
+            'created_at': time.time()
+        }
+        
+        return jsonify({'sessionId': session_id})
+
+    except Exception as e:
+        if os.path.exists(cpp_path):
+            os.remove(cpp_path)
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/', methods=['GET'])
 def home():

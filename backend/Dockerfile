@@ -27,11 +27,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 
 # Expose port
-EXPOSE 5550
+EXPOSE 8080
 
 # Set environment variables
 ENV FLASK_APP=app.py
 ENV PYTHONUNBUFFERED=1
 
 # Run the application
-CMD ["python3", "app.py"]
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5550", "app:app"]

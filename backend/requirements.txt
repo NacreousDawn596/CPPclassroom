@@ -4,3 +4,4 @@ Werkzeug==3.0.1
 flask-socketio==5.3.6
 ptyprocess==0.7.0
 eventlet==0.33.3
+gunicorn==21.2.0
