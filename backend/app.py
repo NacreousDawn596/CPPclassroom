@@ -206,8 +206,37 @@ def get_output(session_id):
         yield f"data: {json.dumps({'output': msg})}\n\n"
 
         try:
+            # Read any buffered output immediately (for fast programs)
+            import fcntl
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            
+            # Give the process a moment to produce output
+            eventlet.sleep(0.05)
+            
+            # Try to read any immediate output
+            try:
+                while True:
+                    data = os.read(fd, 1024)
+                    if data:
+                        output = data.decode(errors='replace')
+                        yield f"data: {json.dumps({'output': output})}\n\n"
+                    else:
+                        break
+            except (OSError, BlockingIOError):
+                pass  # No more immediate data
+            
+            # Now enter the normal polling loop
             while True:
                 if not proc.isalive():
+                    # Process finished, try to read any remaining buffered output
+                    try:
+                        data = os.read(fd, 1024)
+                        if data:
+                            output = data.decode(errors='replace')
+                            yield f"data: {json.dumps({'output': output})}\n\n"
+                    except (OSError, BlockingIOError):
+                        pass
                     break
                 
                 r, w, x = select.select([fd], [], [], 0.1)
