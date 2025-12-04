@@ -50,6 +50,7 @@ def get_user_quota(session_id):
     
     if session_id not in quota_data:
         quota_data[session_id] = {'date': today, 'count': 0}
+        save_quota(quota_data)  # Save immediately for new users
     
     user_data = quota_data[session_id]
     
@@ -150,7 +151,7 @@ def run_code():
         if os.path.exists(cpp_path):
             os.remove(cpp_path)
 
-@app.route('/api/debug', methods=['POST'])
+@app.route('/debug', methods=['POST'])
 def debug_code():
     """Debug C++ code using Gemini AI"""
     if not GEMINI_API_KEY:
@@ -197,9 +198,33 @@ CORRECTED CODE:
 ```
 """
         
-        # Call Gemini API
+        # Call Gemini API with retry logic for rate limits
         model = genai.GenerativeModel('gemini-pro')
-        response = model.generate_content(prompt)
+        
+        max_retries = 3
+        retry_delay = 1  # Start with 1 second
+        
+        for attempt in range(max_retries):
+            try:
+                response = model.generate_content(prompt)
+                break  # Success, exit retry loop
+            except Exception as api_error:
+                error_str = str(api_error)
+                if '429' in error_str and attempt < max_retries - 1:
+                    # Rate limit hit, wait and retry
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                elif '429' in error_str:
+                    # Still hitting rate limit after retries
+                    return jsonify({
+                        'error': 'Gemini API rate limit exceeded. Please wait a moment and try again.',
+                        'quota': remaining,
+                        'message': 'The AI service is temporarily busy. Please try again in a few seconds.'
+                    }), 503
+                else:
+                    # Other API error
+                    raise api_error
         
         # Parse response
         response_text = response.text
