@@ -357,6 +357,13 @@ function clearOutput() {
 function updateQuotaDisplay() {
     const quotaBadge = document.getElementById('quotaBadge');
     const debugBtn = document.getElementById('debugBtn');
+
+    // Safety check - elements might not exist if HTML isn't updated
+    if (!quotaBadge || !debugBtn) {
+        console.warn('Debug UI elements not found - make sure frontend is deployed with latest HTML');
+        return;
+    }
+
     quotaBadge.textContent = `${currentQuota}/3`;
 
     if (currentQuota <= 0) {
