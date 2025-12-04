@@ -112,8 +112,8 @@ int main() {
     // Save user session ID
     localStorage.setItem('userSessionId', userSessionId);
 
-    // Update quota display
-    updateQuotaDisplay();
+    // Fetch and update quota display
+    fetchQuota();
 }
 
 function generateId() {
@@ -372,6 +372,24 @@ function updateQuotaDisplay() {
     } else {
         debugBtn.disabled = false;
         debugBtn.title = 'Debug with AI (Gemini)';
+    }
+}
+
+async function fetchQuota() {
+    try {
+        const response = await fetch(`${API_URL}/quota/${userSessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            currentQuota = data.quota;
+            updateQuotaDisplay();
+        } else {
+            // If quota fetch fails, keep default
+            updateQuotaDisplay();
+        }
+    } catch (err) {
+        console.error('Error fetching quota:', err);
+        // Keep default quota on error
+        updateQuotaDisplay();
     }
 }
 

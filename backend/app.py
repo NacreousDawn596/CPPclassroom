@@ -223,6 +223,18 @@ def home():
 def health():
     return {'status': 'healthy'}
 
+@app.route('/quota/<session_id>', methods=['GET'])
+def check_quota(session_id):
+    """Check remaining quota for a user"""
+    try:
+        remaining = get_user_quota(session_id)
+        return jsonify({
+            'quota': remaining,
+            'max': MAX_DAILY_DEBUGS
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/debug', methods=['POST'])
 def debug_code():
     """Debug C++ code using Gemini AI"""
