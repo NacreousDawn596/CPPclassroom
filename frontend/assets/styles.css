@@ -360,12 +360,143 @@ body {
     display: inline-block;
     width: 14px;
     height: 14px;
-    border: 2px solid rgba(255,255,255,.2);
+    border: 2px solid rgba(255, 255, 255, .2);
     border-radius: 50%;
     border-top-color: white;
     animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* AI Debug Button */
+.btn-ai {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: relative;
+}
+
+.btn-ai:hover {
+    background: linear-gradient(135deg, #7c8ff0 0%, #8b5ab8 100%);
+}
+
+.quota-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.btn-success {
+    background: #28a745;
+}
+
+.btn-success:hover {
+    background: #218838;
+}
+
+/* Diff Modal */
+.diff-modal {
+    min-width: 80vw;
+    max-width: 90vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: #cccccc;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background: #f14c4c;
+    color: white;
+}
+
+.diff-explanation {
+    background: #3c3c3c;
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    border-left: 3px solid #667eea;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.diff-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    flex: 1;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.diff-side {
+    display: flex;
+    flex-direction: column;
+    background: #1e1e1e;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.diff-header {
+    background: #323233;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-bottom: 1px solid #1e1e1e;
+}
+
+.diff-code {
+    flex: 1;
+    overflow: auto;
+    padding: 12px;
+    margin: 0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Diff Highlighting */
+.diff-line-add {
+    background: rgba(40, 167, 69, 0.2);
+    border-left: 3px solid #28a745;
+    padding-left: 8px;
+    display: block;
+}
+
+.diff-line-remove {
+    background: rgba(220, 53, 69, 0.2);
+    border-left: 3px solid #dc3545;
+    padding-left: 8px;
+    display: block;
+    text-decoration: line-through;
+}
+
+.diff-line-context {
+    display: block;
 }

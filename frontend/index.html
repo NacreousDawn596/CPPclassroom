@@ -30,6 +30,15 @@
                     </svg>
                     Run
                 </button>
+                <button class="btn btn-ai" id="debugBtn" title="Debug with AI (Gemini)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    Debug AI
+                    <span class="quota-badge" id="quotaBadge">3/3</span>
+                </button>
                 <button class="btn btn-secondary" id="clearOutputBtn">Clear Output</button>
             </div>
         </div>
@@ -73,6 +82,31 @@
             <div class="modal-buttons">
                 <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
                 <button class="btn" id="createBtn">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diff Viewer Modal -->
+    <div class="modal" id="diffModal">
+        <div class="modal-content diff-modal">
+            <div class="modal-header">
+                <div class="modal-title">🤖 AI Debug Suggestions</div>
+                <button class="modal-close" id="closeDiffBtn">×</button>
+            </div>
+            <div class="diff-explanation" id="diffExplanation"></div>
+            <div class="diff-container">
+                <div class="diff-side">
+                    <div class="diff-header">Original Code</div>
+                    <pre class="diff-code" id="originalCode"></pre>
+                </div>
+                <div class="diff-side">
+                    <div class="diff-header">Suggested Fix</div>
+                    <pre class="diff-code" id="suggestedCode"></pre>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="rejectBtn">Reject</button>
+                <button class="btn btn-success" id="acceptBtn">Accept Changes</button>
             </div>
         </div>
     </div>

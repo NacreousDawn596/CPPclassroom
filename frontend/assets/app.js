@@ -8,6 +8,10 @@ let term;
 let fitAddon;
 let sessionId = null;
 let outputEventSource = null;
+let lastError = '';
+let userSessionId = localStorage.getItem('userSessionId') || generateId();
+let currentQuota = 3;
+let suggestedCode = '';
 
 function init() {
     // Initialize xterm.js
@@ -100,6 +104,16 @@ int main() {
     document.getElementById('fileNameInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') createNewFile();
     });
+    document.getElementById('debugBtn').addEventListener('click', debugCode);
+    document.getElementById('closeDiffBtn').addEventListener('click', closeDiffModal);
+    document.getElementById('rejectBtn').addEventListener('click', closeDiffModal);
+    document.getElementById('acceptBtn').addEventListener('click', acceptSuggestion);
+
+    // Save user session ID
+    localStorage.setItem('userSessionId', userSessionId);
+
+    // Update quota display
+    updateQuotaDisplay();
 }
 
 function generateId() {
@@ -270,7 +284,13 @@ async function runCode() {
 
         if (!response.ok) {
             const error = await response.json();
-            term.write(`\r\n\x1b[31mError: ${error.message || 'Failed to start execution'}\x1b[0m\r\n`);
+            // Display stderr if available, otherwise show the generic message
+            const errorOutput = error.stderr || error.output || error.message || 'Failed to start execution';
+            term.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
+            if (error.stderr || error.output) {
+                term.write(`\x1b[31m${errorOutput}\x1b[0m\r\n`);
+                lastError = errorOutput; // Store for AI debugging
+            }
             return;
         }
 
@@ -282,6 +302,7 @@ async function runCode() {
 
     } catch (err) {
         term.write(`\r\n\x1b[31mConnection Error: ${err.message}\x1b[0m\r\n`);
+        lastError = err.message;
     }
 }
 
@@ -330,6 +351,158 @@ async function sendInput(data) {
 
 function clearOutput() {
     term.reset();
+}
+
+// AI Debug Functions
+function updateQuotaDisplay() {
+    const quotaBadge = document.getElementById('quotaBadge');
+    const debugBtn = document.getElementById('debugBtn');
+    quotaBadge.textContent = `${currentQuota}/3`;
+
+    if (currentQuota <= 0) {
+        debugBtn.disabled = true;
+        debugBtn.title = 'Daily quota exhausted. Come back tomorrow!';
+    } else {
+        debugBtn.disabled = false;
+        debugBtn.title = 'Debug with AI (Gemini)';
+    }
+}
+
+async function debugCode() {
+    const code = editor.getValue();
+
+    if (!code.trim()) {
+        alert('Please write some code first!');
+        return;
+    }
+
+    if (currentQuota <= 0) {
+        alert('You have used all 3 debugs for today. Come back tomorrow!');
+        return;
+    }
+
+    // Show loading state
+    const debugBtn = document.getElementById('debugBtn');
+    const originalText = debugBtn.innerHTML;
+    debugBtn.disabled = true;
+    debugBtn.innerHTML = '<span class="spinner"></span> Analyzing...';
+
+    try {
+        const response = await fetch(`${API_URL}/debug`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                code: code,
+                error: lastError,
+                sessionId: userSessionId
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (response.status === 429) {
+                alert(data.message || 'Daily quota exhausted!');
+                currentQuota = 0;
+                updateQuotaDisplay();
+            } else {
+                alert(`Debug failed: ${data.error || 'Unknown error'}`);
+            }
+            return;
+        }
+
+        // Update quota
+        currentQuota = data.quota;
+        updateQuotaDisplay();
+
+        // Store suggested code
+        suggestedCode = data.correctedCode;
+
+        // Display diff
+        displayDiff(code, data.correctedCode, data.explanation, data.diff);
+
+    } catch (err) {
+        alert(`Connection error: ${err.message}`);
+    } finally {
+        debugBtn.disabled = false;
+        debugBtn.innerHTML = originalText;
+    }
+}
+
+function displayDiff(original, suggested, explanation, diffData) {
+    // Set explanation
+    document.getElementById('diffExplanation').textContent = explanation || 'AI has analyzed your code and suggests the following changes:';
+
+    // Display original code
+    const originalCodeEl = document.getElementById('originalCode');
+    originalCodeEl.innerHTML = '';
+    original.split('\n').forEach(line => {
+        const span = document.createElement('span');
+        span.className = 'diff-line-context';
+        span.textContent = line + '\n';
+        originalCodeEl.appendChild(span);
+    });
+
+    // Display suggested code with highlighting
+    const suggestedCodeEl = document.getElementById('suggestedCode');
+    suggestedCodeEl.innerHTML = '';
+
+    // Create a simple diff highlighting
+    const originalLines = original.split('\n');
+    const suggestedLines = suggested.split('\n');
+
+    suggestedLines.forEach((line, index) => {
+        const span = document.createElement('span');
+
+        if (index >= originalLines.length || originalLines[index] !== line) {
+            // Line is different (added or modified)
+            if (index < originalLines.length) {
+                // Modified line - show as change
+                span.className = 'diff-line-add';
+            } else {
+                // New line
+                span.className = 'diff-line-add';
+            }
+        } else {
+            // Line unchanged
+            span.className = 'diff-line-context';
+        }
+
+        span.textContent = line + '\n';
+        suggestedCodeEl.appendChild(span);
+    });
+
+    // Show removed lines in original
+    if (originalLines.length > suggestedLines.length) {
+        for (let i = suggestedLines.length; i < originalLines.length; i++) {
+            const span = document.createElement('span');
+            span.className = 'diff-line-remove';
+            span.textContent = originalLines[i] + '\n';
+            originalCodeEl.appendChild(span);
+        }
+    }
+
+    // Show modal
+    document.getElementById('diffModal').classList.add('active');
+}
+
+function closeDiffModal() {
+    document.getElementById('diffModal').classList.remove('active');
+}
+
+function acceptSuggestion() {
+    if (suggestedCode) {
+        editor.setValue(suggestedCode);
+        const file = files.find(f => f.id === activeFileId);
+        if (file) {
+            file.content = suggestedCode;
+            saveToStorage();
+        }
+    }
+    closeDiffModal();
+    term.write('\r\n\x1b[32mAI suggestions applied successfully!\x1b[0m\r\n');
 }
 
 // Start the app
